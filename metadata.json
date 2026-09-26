@@ -1,0 +1,6 @@
+{
+  "name": "RootBox",
+  "description": "Self-contained no-root virtual Android environment with isolated root shell, package manager, and virtual filesystem.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
