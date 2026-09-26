@@ -32,6 +32,18 @@ interface VirtualAppDao {
     @Query("UPDATE virtual_apps SET isRunning = :isRunning WHERE packageName = :packageName")
     suspend fun setAppRunningState(packageName: String, isRunning: Boolean)
 
+    @Query("UPDATE virtual_apps SET rootAccessGranted = :granted WHERE packageName = :packageName")
+    suspend fun setRootAccess(packageName: String, granted: Boolean)
+
+    @Query("UPDATE virtual_apps SET dataSizeBytes = 0, cacheSizeBytes = 0 WHERE packageName = :packageName")
+    suspend fun clearAppData(packageName: String)
+
+    @Query("UPDATE virtual_apps SET cacheSizeBytes = 0 WHERE packageName = :packageName")
+    suspend fun clearAppCache(packageName: String)
+
+    @Query("UPDATE virtual_apps SET lastLaunched = :timestamp WHERE packageName = :packageName")
+    suspend fun updateLastLaunched(packageName: String, timestamp: Long)
+
     @Query("UPDATE virtual_apps SET isRunning = 0")
     suspend fun stopAllApps()
 

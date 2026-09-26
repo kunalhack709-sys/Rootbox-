@@ -16,7 +16,7 @@ import com.example.data.local.entities.VirtualAppEntity
         NetworkLogEntity::class,
         TerminalHistoryEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class RootBoxDatabase : RoomDatabase() {
@@ -35,7 +35,9 @@ abstract class RootBoxDatabase : RoomDatabase() {
                     context.applicationContext,
                     RootBoxDatabase::class.java,
                     "rootbox_database.db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

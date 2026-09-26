@@ -4,6 +4,8 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.apk.ApkValidationResult
+import com.example.core.apk.InstallStepState
 import com.example.core.filesystem.VirtualFileItem
 import com.example.core.network.NetworkConfig
 import com.example.core.network.NetworkStats
@@ -90,11 +92,29 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedFileForEdit = MutableStateFlow<Pair<String, String>?>(null)
     val selectedFileForEdit: StateFlow<Pair<String, String>?> = _selectedFileForEdit.asStateFlow()
 
+    // App Management State
     private val _selectedAppForDetail = MutableStateFlow<VirtualAppEntity?>(null)
     val selectedAppForDetail: StateFlow<VirtualAppEntity?> = _selectedAppForDetail.asStateFlow()
 
     private val _runningAppSim = MutableStateFlow<VirtualAppEntity?>(null)
     val runningAppSim: StateFlow<VirtualAppEntity?> = _runningAppSim.asStateFlow()
+
+    // New Add App & Install Dialog State
+    private val _showAddAppSheet = MutableStateFlow(false)
+    val showAddAppSheet: StateFlow<Boolean> = _showAddAppSheet.asStateFlow()
+
+    private val _installProgressState = MutableStateFlow<InstallStepState?>(null)
+    val installProgressState: StateFlow<InstallStepState?> = _installProgressState.asStateFlow()
+
+    private val _validationFailure = MutableStateFlow<ApkValidationResult?>(null)
+    val validationFailure: StateFlow<ApkValidationResult?> = _validationFailure.asStateFlow()
+
+    private val _rootRequestPrompt = MutableStateFlow<VirtualAppEntity?>(null)
+    val rootRequestPrompt: StateFlow<VirtualAppEntity?> = _rootRequestPrompt.asStateFlow()
+
+    // First Run State
+    private val _isEnvironmentInitialized = MutableStateFlow(true)
+    val isEnvironmentInitialized: StateFlow<Boolean> = _isEnvironmentInitialized.asStateFlow()
 
     private val _showSetupWizard = MutableStateFlow(false)
     val showSetupWizard: StateFlow<Boolean> = _showSetupWizard.asStateFlow()
@@ -126,6 +146,22 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearSnackbar() {
         _snackbarMessage.value = null
+    }
+
+    fun openAddAppSheet() {
+        _showAddAppSheet.value = true
+    }
+
+    fun closeAddAppSheet() {
+        _showAddAppSheet.value = false
+    }
+
+    fun dismissInstallProgress() {
+        _installProgressState.value = null
+    }
+
+    fun dismissValidationFailure() {
+        _validationFailure.value = null
     }
 
     fun startInstance() {
@@ -292,15 +328,53 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Apps & APK
-    fun installApk(uri: Uri) {
+    // Apps & APK Installation Flow
+    fun installApkWithValidation(uri: Uri) {
+        closeAddAppSheet()
         viewModelScope.launch {
-            showMessage("Parsing and installing APK into virtual container...")
-            val result = vManager.apkManager.installApkFromUri(uri)
-            result.onSuccess { app ->
-                showMessage("Installed ${app.appName} into RootBox.")
-            }.onFailure { err ->
-                showMessage("Installation failed: ${err.message}")
+            _installProgressState.value = InstallStepState(
+                progressPercent = 5,
+                currentStatus = "Validating APK package..."
+            )
+
+            // Step 1: Validate
+            val validation = vManager.apkManager.validateApk(uri)
+            if (!validation.isValid) {
+                _installProgressState.value = null
+                _validationFailure.value = validation
+                return@launch
+            }
+
+            // Step 2: Install with step progress
+            vManager.apkManager.installApkFromUriWithProgress(uri) { state ->
+                _installProgressState.value = state
+            }
+        }
+    }
+
+    fun installMultipleApks(uris: List<Uri>) {
+        closeAddAppSheet()
+        viewModelScope.launch {
+            if (uris.isEmpty()) return@launch
+            _installProgressState.value = InstallStepState(
+                totalApks = uris.size,
+                currentStatus = "Starting batch installation of ${uris.size} APKs..."
+            )
+            vManager.apkManager.installMultipleApks(uris) { state ->
+                _installProgressState.value = state
+            }
+        }
+    }
+
+    fun installSampleApp(sampleKey: String) {
+        closeAddAppSheet()
+        viewModelScope.launch {
+            _installProgressState.value = InstallStepState(
+                progressPercent = 10,
+                currentStatus = "Preparing sample package..."
+            )
+            vManager.apkManager.installSampleApp(sampleKey) { state ->
+                _installProgressState.value = state
             }
         }
     }
@@ -324,6 +398,39 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun launchVirtualApp(app: VirtualAppEntity) {
+        // If app requests superuser and has not yet been granted/denied, prompt user
+        if (app.permissions.contains("SUPERUSER") && !app.rootAccessGranted) {
+            _rootRequestPrompt.value = app
+        } else {
+            proceedLaunchApp(app)
+        }
+    }
+
+    fun allowRootAccess(packageName: String) {
+        viewModelScope.launch {
+            vManager.apkManager.setRootAccess(packageName, true)
+            val app = _rootRequestPrompt.value
+            _rootRequestPrompt.value = null
+            if (app != null && app.packageName == packageName) {
+                proceedLaunchApp(app.copy(rootAccessGranted = true))
+            }
+            showMessage("Virtual root granted to $packageName inside RootBox container.")
+        }
+    }
+
+    fun denyRootAccess(packageName: String) {
+        viewModelScope.launch {
+            vManager.apkManager.setRootAccess(packageName, false)
+            val app = _rootRequestPrompt.value
+            _rootRequestPrompt.value = null
+            if (app != null && app.packageName == packageName) {
+                proceedLaunchApp(app.copy(rootAccessGranted = false))
+            }
+            showMessage("Virtual root denied for $packageName.")
+        }
+    }
+
+    private fun proceedLaunchApp(app: VirtualAppEntity) {
         viewModelScope.launch {
             vManager.apkManager.launchApp(app.packageName)
             _runningAppSim.value = app
@@ -345,6 +452,84 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             vManager.apkManager.stopApp(app.packageName)
             showMessage("Stopped ${app.appName}.")
+            if (_selectedAppForDetail.value?.packageName == app.packageName) {
+                _selectedAppForDetail.value = _selectedAppForDetail.value?.copy(isRunning = false)
+            }
+        }
+    }
+
+    fun forceStopApp(app: VirtualAppEntity) {
+        viewModelScope.launch {
+            vManager.apkManager.stopApp(app.packageName)
+            if (_runningAppSim.value?.packageName == app.packageName) {
+                _runningAppSim.value = null
+            }
+            showMessage("Force stopped ${app.appName} (SIGKILL).")
+            if (_selectedAppForDetail.value?.packageName == app.packageName) {
+                _selectedAppForDetail.value = _selectedAppForDetail.value?.copy(isRunning = false)
+            }
+        }
+    }
+
+    fun clearAppData(packageName: String) {
+        viewModelScope.launch {
+            val ok = vManager.apkManager.clearAppData(packageName)
+            if (ok) {
+                showMessage("Cleared app data for $packageName.")
+                if (_selectedAppForDetail.value?.packageName == packageName) {
+                    _selectedAppForDetail.value = _selectedAppForDetail.value?.copy(dataSizeBytes = 0, cacheSizeBytes = 0)
+                }
+            } else {
+                showMessage("Failed to clear app data.")
+            }
+        }
+    }
+
+    fun clearAppCache(packageName: String) {
+        viewModelScope.launch {
+            val ok = vManager.apkManager.clearAppCache(packageName)
+            if (ok) {
+                showMessage("Cleared cache for $packageName.")
+                if (_selectedAppForDetail.value?.packageName == packageName) {
+                    _selectedAppForDetail.value = _selectedAppForDetail.value?.copy(cacheSizeBytes = 0)
+                }
+            } else {
+                showMessage("Failed to clear cache.")
+            }
+        }
+    }
+
+    fun exportApk(packageName: String, destUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                getApplication<Application>().contentResolver.openOutputStream(destUri)?.use { stream ->
+                    val ok = vManager.apkManager.exportApk(packageName, stream)
+                    if (ok) {
+                        showMessage("Exported $packageName APK successfully.")
+                    } else {
+                        showMessage("Export failed: APK not found in virtual storage.")
+                    }
+                }
+            } catch (e: Exception) {
+                showMessage("Error exporting APK: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun exportAppData(packageName: String, destUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                getApplication<Application>().contentResolver.openOutputStream(destUri)?.use { stream ->
+                    val ok = vManager.apkManager.exportAppData(packageName, stream)
+                    if (ok) {
+                        showMessage("Exported app data for $packageName.")
+                    } else {
+                        showMessage("Export failed.")
+                    }
+                }
+            } catch (e: Exception) {
+                showMessage("Error exporting app data: ${e.localizedMessage}")
+            }
         }
     }
 
@@ -410,6 +595,21 @@ class RootBoxViewModel(application: Application) : AndroidViewModel(application)
     fun updateHardwareConfig(config: HardwareConfig) {
         vManager.instance.updateHardwareConfig(config)
         showMessage("Hardware configuration updated.")
+    }
+
+    fun createEnvironment(ramMb: Int, storageGb: Int, systemImage: String) {
+        val current = hardwareConfig.value
+        updateHardwareConfig(
+            current.copy(
+                allocatedRamMb = ramMb,
+                virtualStorageGb = storageGb,
+                systemImage = systemImage
+            )
+        )
+        _isEnvironmentInitialized.value = true
+        _showSetupWizard.value = false
+        startInstance()
+        showMessage("Virtual Android environment created and ready!")
     }
 
     fun dismissSetupWizard() {

@@ -18,25 +18,77 @@ class VirtualTerminalEngine(
     var isRoot: Boolean = true
         private set
 
+    var isKaliMode: Boolean = true
+        private set
+
+    // Installed packages in the Kali/RootBox repository
+    val installedTools = mutableSetOf(
+        "nmap",
+        "netcat",
+        "curl",
+        "wget",
+        "whois",
+        "dnsutils",
+        "traceroute",
+        "ifconfig",
+        "netstat",
+        "neofetch",
+        "python3",
+        "git",
+        "busybox",
+        "nano"
+    )
+
+    private val availableAptRepo = mapOf(
+        "nmap" to "Network exploration tool and security / port scanner",
+        "netcat" to "TCP/IP swiss army knife (nc utility)",
+        "curl" to "Command line tool for transferring data with URLs",
+        "wget" to "Network utility to retrieve files from the Web",
+        "whois" to "Intelligent WHOIS client",
+        "dnsutils" to "DNS utilities including dig, nslookup and host",
+        "traceroute" to "Traces route packets take to network host",
+        "tcpdump" to "Network packet capture and protocol analyzer",
+        "hydra" to "Network authentication and login auditing tool",
+        "sqlmap" to "Database inspection and SQL security tool",
+        "wireshark" to "Network traffic packet analyzer CLI (tshark)",
+        "aircrack-ng" to "Wireless network security assessment suite",
+        "john" to "John the Ripper password security auditing tool",
+        "nikto" to "Web server security and configuration scanner",
+        "metasploit-framework" to "Security auditing and penetration testing suite",
+        "neofetch" to "Fast, highly customizable system info script",
+        "python3" to "Interactive Python 3.11 runtime environment",
+        "git" to "Fast, scalable, distributed revision control system",
+        "htop" to "Interactive process viewer and system monitor",
+        "nano" to "Small, friendly text editor"
+    )
+
     private val envVars = mutableMapOf(
         "USER" to "root",
         "UID" to "0",
         "GID" to "0",
         "HOME" to "/root",
-        "SHELL" to "/system/bin/sh",
-        "PATH" to "/system/xbin:/system/bin:/vendor/bin:/data/local/tmp",
+        "SHELL" to "/bin/bash",
+        "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/xbin:/system/bin",
         "ROOTBOX_VIRTUAL" to "1",
         "ROOTBOX_VERSION" to "2.4.0-vaosp",
         "TERM" to "xterm-256color",
-        "HOSTNAME" to "rootbox",
+        "HOSTNAME" to "kali",
+        "OS" to "Kali GNU/Linux Rolling",
         "ANDROID_DATA" to "/data",
         "ANDROID_ROOT" to "/system"
     )
 
     fun getPrompt(): String {
-        val userStr = if (isRoot) "root@rootbox" else "shell@rootbox"
-        val symbol = if (isRoot) "#" else "$"
-        return "$userStr:$cwd $symbol "
+        return if (isKaliMode) {
+            val userStr = if (isRoot) "root㉿kali" else "kali㉿kali"
+            val displayCwd = if (cwd == "/root" && isRoot) "~" else if (cwd == "/home/kali" && !isRoot) "~" else cwd
+            val symbol = if (isRoot) "#" else "$"
+            "┌──($userStr)-[$displayCwd]\n└─$symbol "
+        } else {
+            val userStr = if (isRoot) "root@rootbox" else "shell@rootbox"
+            val symbol = if (isRoot) "#" else "$"
+            "$userStr:$cwd $symbol "
+        }
     }
 
     suspend fun executeCommand(input: String): List<TerminalLine> {
@@ -50,7 +102,7 @@ class VirtualTerminalEngine(
         val lower = trimmed.lowercase()
         val realRootKeywords = listOf(
             "fastboot", "reboot bootloader", "reboot recovery", "insmod",
-            "rmmod", "modprobe", "magisk", "supersu", "unlock_bootloader",
+            "rmmod", "modprobe", "magisk", "unlock_bootloader",
             "flash", "dd if=/dev/zero of=/dev/block"
         )
         if (realRootKeywords.any { lower.startsWith(it) || lower.contains(" $it") }) {
@@ -63,7 +115,7 @@ class VirtualTerminalEngine(
             return results
         }
 
-        // Handle pipe or redirection if simple
+        // Handle redirection
         if (trimmed.contains(" > ") || trimmed.contains(" >> ")) {
             return handleRedirection(trimmed, results)
         }
@@ -74,38 +126,310 @@ class VirtualTerminalEngine(
 
         when (cmd) {
             "clear" -> {
-                // Return special signal
                 return listOf(TerminalLine("__CLEAR_SCREEN__", LineType.SYSTEM))
             }
 
             "help" -> {
-                results.add(TerminalLine("RootBox Virtual Android Shell (vAOSP 14)", LineType.SYSTEM))
-                results.add(TerminalLine("Commands:", LineType.SYSTEM))
-                results.add(TerminalLine("  id, whoami, uname -a, su, exit      : Identity & Privilege controls", LineType.OUTPUT))
-                results.add(TerminalLine("  pwd, cd, ls, cat, touch, mkdir, rm  : Virtual Filesystem operations", LineType.OUTPUT))
-                results.add(TerminalLine("  cp, mv, chmod, df -h, free, env     : System inspection & file utils", LineType.OUTPUT))
-                results.add(TerminalLine("  ps, top, ping, getprop, setprop     : Process, network & properties", LineType.OUTPUT))
-                results.add(TerminalLine("  pm [list|install|uninstall]         : Virtual Package Manager", LineType.OUTPUT))
-                results.add(TerminalLine("  pkg [list|install <app>]            : RootBox App Repository", LineType.OUTPUT))
-                results.add(TerminalLine("  dmesg, uptime, date, echo, clear    : Virtual system utilities", LineType.OUTPUT))
-                results.add(TerminalLine("Note: Root privileges are strictly confined to the RootBox container.", LineType.WARNING))
+                results.add(TerminalLine("Kali Linux & RootBox Virtual Shell (vAOSP 14)", LineType.SYSTEM))
+                results.add(TerminalLine("Package Management:", LineType.SYSTEM))
+                results.add(TerminalLine("  apt update                           : Update Kali repository package index", LineType.OUTPUT))
+                results.add(TerminalLine("  apt install <tool>                   : Install tools (nmap, netcat, curl, etc.)", LineType.OUTPUT))
+                results.add(TerminalLine("  apt list [--installed]               : List available or installed tools", LineType.OUTPUT))
+                results.add(TerminalLine("  apt remove <tool>                    : Remove installed tool", LineType.OUTPUT))
+                results.add(TerminalLine("Network & Security Tools:", LineType.SYSTEM))
+                results.add(TerminalLine("  nmap [-sS|-sT|-p] <target>           : Network and open port scanner", LineType.OUTPUT))
+                results.add(TerminalLine("  ifconfig / ip addr                   : Display virtual network interfaces (vnet0)", LineType.OUTPUT))
+                results.add(TerminalLine("  netstat / ss                         : Show active virtual sockets & ports", LineType.OUTPUT))
+                results.add(TerminalLine("  curl [-I] <url>                      : Transfer data / HTTP requests", LineType.OUTPUT))
+                results.add(TerminalLine("  wget <url>                           : Download file from web into virtual storage", LineType.OUTPUT))
+                results.add(TerminalLine("  whois <domain>                       : Query domain WHOIS registration", LineType.OUTPUT))
+                results.add(TerminalLine("  dig / nslookup <domain>              : Query DNS records via 8.8.8.8", LineType.OUTPUT))
+                results.add(TerminalLine("  traceroute <target>                  : Trace packet route across virtual hops", LineType.OUTPUT))
+                results.add(TerminalLine("  nc / netcat <host> <port>            : Test TCP port connection", LineType.OUTPUT))
+                results.add(TerminalLine("  tcpdump                              : Capture live packet traffic on vnet0", LineType.OUTPUT))
+                results.add(TerminalLine("  msfconsole                           : Launch Metasploit console banner", LineType.OUTPUT))
+                results.add(TerminalLine("  neofetch                             : Show Kali Linux system information", LineType.OUTPUT))
+                results.add(TerminalLine("System & Filesystem:", LineType.SYSTEM))
+                results.add(TerminalLine("  id, whoami, uname -a, su, exit       : User identity & privilege control", LineType.OUTPUT))
+                results.add(TerminalLine("  pwd, cd, ls, cat, touch, mkdir, rm   : Virtual Filesystem operations", LineType.OUTPUT))
+                results.add(TerminalLine("  kali-mode [on|off]                   : Toggle Kali prompt style", LineType.OUTPUT))
+                results.add(TerminalLine("  pm [list|install|uninstall]          : Android Package Manager", LineType.OUTPUT))
+            }
+
+            // Kali / Root prompt toggle
+            "kali", "kali-mode" -> {
+                if (args.isNotEmpty() && args[0] == "off") {
+                    isKaliMode = false
+                    results.add(TerminalLine("Switched to standard RootBox prompt style.", LineType.OUTPUT))
+                } else {
+                    isKaliMode = true
+                    results.add(TerminalLine("Switched to Kali Linux prompt style: ┌──(root㉿kali)-[/]└─#", LineType.SUCCESS))
+                }
+            }
+
+            "kali-banner", "banner" -> {
+                printKaliBanner(results)
+            }
+
+            "neofetch", "fastfetch" -> {
+                printNeofetch(results)
+            }
+
+            // APT Package Manager
+            "apt", "apt-get" -> {
+                handleAptCommand(args, results)
+            }
+
+            "dpkg" -> {
+                if (args.contains("-l")) {
+                    results.add(TerminalLine("Desired=Unknown/Install/Remove/Purge/Hold", LineType.SYSTEM))
+                    results.add(TerminalLine("Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend", LineType.SYSTEM))
+                    results.add(TerminalLine("++- ==========================================================================", LineType.SYSTEM))
+                    installedTools.forEach { tool ->
+                        val desc = availableAptRepo[tool] ?: "Kali Linux utility package"
+                        results.add(TerminalLine("ii  $tool  2.4.0-vaosp  arm64  $desc", LineType.OUTPUT))
+                    }
+                } else {
+                    results.add(TerminalLine("dpkg: usage: dpkg -l (list packages)", LineType.WARNING))
+                }
+            }
+
+            // Network Tools: NMAP
+            "nmap" -> {
+                if (!installedTools.contains("nmap")) {
+                    results.add(TerminalLine("bash: nmap: command not found. You can install it with: apt install nmap", LineType.ERROR))
+                } else {
+                    val target = args.lastOrNull { !it.startsWith("-") } ?: "192.168.100.1"
+                    val now = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+                    results.add(TerminalLine("Starting Nmap 7.94 ( https://nmap.org ) at $now UTC", LineType.SYSTEM))
+                    results.add(TerminalLine("Nmap scan report for $target", LineType.OUTPUT))
+                    results.add(TerminalLine("Host is up (0.0012s latency).", LineType.SUCCESS))
+                    results.add(TerminalLine("Not shown: 995 closed tcp ports (conn-refused)", LineType.OUTPUT))
+                    results.add(TerminalLine("PORT     STATE SERVICE       VERSION", LineType.SYSTEM))
+                    results.add(TerminalLine("22/tcp   open  ssh           OpenSSH 9.3p1 Debian (protocol 2.0)", LineType.OUTPUT))
+                    results.add(TerminalLine("53/tcp   open  domain        dnsmasq 2.89", LineType.OUTPUT))
+                    results.add(TerminalLine("80/tcp   open  http          nginx 1.24.0 (RootBox Virtual vAOSP)", LineType.OUTPUT))
+                    results.add(TerminalLine("443/tcp  open  ssl/https     nginx 1.24.0", LineType.OUTPUT))
+                    results.add(TerminalLine("8080/tcp open  http-proxy    RootBox Internal Proxy", LineType.OUTPUT))
+                    results.add(TerminalLine("Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel", LineType.OUTPUT))
+                    results.add(TerminalLine("Nmap done: 1 IP address (1 host up) scanned in 1.48 seconds", LineType.SUCCESS))
+                }
+            }
+
+            // IFCONFIG / IP
+            "ifconfig" -> {
+                results.add(TerminalLine("vnet0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500", LineType.SYSTEM))
+                results.add(TerminalLine("        inet 192.168.100.2  netmask 255.255.255.0  broadcast 192.168.100.255", LineType.OUTPUT))
+                results.add(TerminalLine("        inet6 fe80::a00:27ff:fe4e:66a1  prefixlen 64  scopeid 0x20<link>", LineType.OUTPUT))
+                results.add(TerminalLine("        ether 08:00:27:4e:66:a1  txqueuelen 1000  (Ethernet)", LineType.OUTPUT))
+                results.add(TerminalLine("        RX packets 4210  bytes 3849120 (3.8 MB)", LineType.OUTPUT))
+                results.add(TerminalLine("        TX packets 3890  bytes 2491020 (2.4 MB)", LineType.OUTPUT))
+                results.add(TerminalLine("", LineType.OUTPUT))
+                results.add(TerminalLine("lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536", LineType.SYSTEM))
+                results.add(TerminalLine("        inet 127.0.0.1  netmask 255.0.0.0", LineType.OUTPUT))
+                results.add(TerminalLine("        inet6 ::1  prefixlen 128  scopeid 0x10<host>", LineType.OUTPUT))
+                results.add(TerminalLine("        loop  txqueuelen 1000  (Local Loopback)", LineType.OUTPUT))
+            }
+
+            "ip" -> {
+                if (args.isEmpty() || args[0] == "a" || args[0] == "addr") {
+                    results.add(TerminalLine("1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default", LineType.SYSTEM))
+                    results.add(TerminalLine("    inet 127.0.0.1/8 scope host lo", LineType.OUTPUT))
+                    results.add(TerminalLine("2: vnet0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default", LineType.SYSTEM))
+                    results.add(TerminalLine("    link/ether 08:00:27:4e:66:a1 brd ff:ff:ff:ff:ff:ff", LineType.OUTPUT))
+                    results.add(TerminalLine("    inet 192.168.100.2/24 brd 192.168.100.255 scope global vnet0", LineType.SUCCESS))
+                } else if (args[0] == "route" || args[0] == "r") {
+                    results.add(TerminalLine("default via 192.168.100.1 dev vnet0 proto static", LineType.OUTPUT))
+                    results.add(TerminalLine("192.168.100.0/24 dev vnet0 proto kernel scope link src 192.168.100.2", LineType.OUTPUT))
+                } else {
+                    results.add(TerminalLine("Usage: ip [addr|route]", LineType.WARNING))
+                }
+            }
+
+            // NETSTAT / SS
+            "netstat", "ss" -> {
+                results.add(TerminalLine("Active Internet connections (only servers)", LineType.SYSTEM))
+                results.add(TerminalLine("Proto Recv-Q Send-Q Local Address           Foreign Address         State", LineType.SYSTEM))
+                results.add(TerminalLine("tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN", LineType.OUTPUT))
+                results.add(TerminalLine("tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN", LineType.OUTPUT))
+                results.add(TerminalLine("tcp        0      0 127.0.0.1:5037          0.0.0.0:*               LISTEN", LineType.OUTPUT))
+                results.add(TerminalLine("tcp        0      0 192.168.100.2:48102     1.1.1.1:443             ESTABLISHED", LineType.SUCCESS))
+                results.add(TerminalLine("udp        0      0 0.0.0.0:53              0.0.0.0:*", LineType.OUTPUT))
+            }
+
+            // CURL
+            "curl" -> {
+                val targetUrl = args.lastOrNull { !it.startsWith("-") } ?: "https://httpbin.org/get"
+                val headersOnly = args.contains("-I") || args.contains("--head")
+                if (headersOnly) {
+                    results.add(TerminalLine("HTTP/2 200 OK", LineType.SUCCESS))
+                    results.add(TerminalLine("date: ${Date()}", LineType.OUTPUT))
+                    results.add(TerminalLine("server: gunicorn/20.1.0", LineType.OUTPUT))
+                    results.add(TerminalLine("content-type: application/json", LineType.OUTPUT))
+                    results.add(TerminalLine("content-length: 284", LineType.OUTPUT))
+                    results.add(TerminalLine("access-control-allow-origin: *", LineType.OUTPUT))
+                } else {
+                    results.add(TerminalLine("{", LineType.OUTPUT))
+                    results.add(TerminalLine("  \"url\": \"$targetUrl\",", LineType.OUTPUT))
+                    results.add(TerminalLine("  \"origin\": \"192.168.100.2\",", LineType.OUTPUT))
+                    results.add(TerminalLine("  \"headers\": {", LineType.OUTPUT))
+                    results.add(TerminalLine("    \"User-Agent\": \"curl/8.2.1-Kali-Linux\",", LineType.OUTPUT))
+                    results.add(TerminalLine("    \"Host\": \"${targetUrl.replace("https://", "").replace("http://", "").split("/")[0]}\"", LineType.OUTPUT))
+                    results.add(TerminalLine("  }", LineType.OUTPUT))
+                    results.add(TerminalLine("}", LineType.OUTPUT))
+                }
+            }
+
+            // WGET
+            "wget" -> {
+                val url = args.lastOrNull { !it.startsWith("-") } ?: "https://example.com/index.html"
+                val filename = url.substringAfterLast("/").ifBlank { "index.html" }
+                results.add(TerminalLine("--${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}--  $url", LineType.SYSTEM))
+                results.add(TerminalLine("Resolving host via 8.8.8.8... 93.184.216.34", LineType.OUTPUT))
+                results.add(TerminalLine("Connecting to 93.184.216.34:443... connected.", LineType.OUTPUT))
+                results.add(TerminalLine("HTTP request sent, awaiting response... 200 OK", LineType.SUCCESS))
+                results.add(TerminalLine("Length: 1256 (1.2K) [text/html]", LineType.OUTPUT))
+                results.add(TerminalLine("Saving to: '$filename'", LineType.OUTPUT))
+                fs.writeFile(resolveVirtualPath(filename), "<html><body><h1>Downloaded via RootBox wget</h1><p>$url</p></body></html>")
+                results.add(TerminalLine("'$filename' saved [1256/1256]", LineType.SUCCESS))
+            }
+
+            // WHOIS
+            "whois" -> {
+                val domain = args.firstOrNull() ?: "example.com"
+                results.add(TerminalLine("Domain Name: ${domain.uppercase()}", LineType.SYSTEM))
+                results.add(TerminalLine("Registry Domain ID: 2138514_DOMAIN_COM-VRSN", LineType.OUTPUT))
+                results.add(TerminalLine("Registrar: RootBox Registrar Services LLC", LineType.OUTPUT))
+                results.add(TerminalLine("Updated Date: 2025-08-14T07:00:00Z", LineType.OUTPUT))
+                results.add(TerminalLine("Creation Date: 1995-10-02T04:00:00Z", LineType.OUTPUT))
+                results.add(TerminalLine("Registry Expiry Date: 2028-10-02T04:00:00Z", LineType.OUTPUT))
+                results.add(TerminalLine("Name Server: NS1.${domain.uppercase()}", LineType.OUTPUT))
+                results.add(TerminalLine("Name Server: NS2.${domain.uppercase()}", LineType.OUTPUT))
+                results.add(TerminalLine("DNSSEC: unsigned", LineType.OUTPUT))
+            }
+
+            // DIG / NSLOOKUP
+            "dig", "nslookup" -> {
+                val domain = args.firstOrNull { !it.startsWith("-") } ?: "example.com"
+                results.add(TerminalLine("; <<>> DiG 9.18.19-1~deb12u1-Kali <<>> $domain", LineType.SYSTEM))
+                results.add(TerminalLine(";; Got answer:", LineType.OUTPUT))
+                results.add(TerminalLine(";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 48210", LineType.OUTPUT))
+                results.add(TerminalLine(";; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1", LineType.OUTPUT))
+                results.add(TerminalLine("", LineType.OUTPUT))
+                results.add(TerminalLine(";; QUESTION SECTION:", LineType.SYSTEM))
+                results.add(TerminalLine(";$domain.			IN	A", LineType.OUTPUT))
+                results.add(TerminalLine("", LineType.OUTPUT))
+                results.add(TerminalLine(";; ANSWER SECTION:", LineType.SYSTEM))
+                results.add(TerminalLine("$domain.		3600	IN	A	93.184.216.34", LineType.SUCCESS))
+                results.add(TerminalLine("", LineType.OUTPUT))
+                results.add(TerminalLine(";; Query time: 14 msec", LineType.OUTPUT))
+                results.add(TerminalLine(";; SERVER: 8.8.8.8#53(8.8.8.8) (UDP)", LineType.OUTPUT))
+            }
+
+            // TRACEROUTE
+            "traceroute" -> {
+                val host = args.firstOrNull() ?: "1.1.1.1"
+                results.add(TerminalLine("traceroute to $host ($host), 30 hops max, 60 byte packets", LineType.SYSTEM))
+                results.add(TerminalLine(" 1  rootbox-vnet-gateway (192.168.100.1)  0.742 ms  0.612 ms  0.518 ms", LineType.OUTPUT))
+                results.add(TerminalLine(" 2  10.0.2.2 (10.0.2.2)  1.420 ms  1.310 ms  1.215 ms", LineType.OUTPUT))
+                results.add(TerminalLine(" 3  172.16.1.1 (172.16.1.1)  6.410 ms  6.310 ms  6.120 ms", LineType.OUTPUT))
+                results.add(TerminalLine(" 4  $host ($host)  14.210 ms  13.820 ms  14.050 ms", LineType.SUCCESS))
+            }
+
+            // NC / NETCAT
+            "nc", "netcat" -> {
+                if (args.isEmpty()) {
+                    results.add(TerminalLine("usage: nc [-zv] <host> <port>", LineType.WARNING))
+                } else {
+                    val port = args.lastOrNull() ?: "80"
+                    val host = args.getOrNull(args.size - 2) ?: "192.168.100.1"
+                    results.add(TerminalLine("Connection to $host $port port [tcp/http] succeeded!", LineType.SUCCESS))
+                }
+            }
+
+            // TCPDUMP
+            "tcpdump" -> {
+                results.add(TerminalLine("tcpdump: verbose output suppressed, use -v[v]... for full protocol decode", LineType.SYSTEM))
+                results.add(TerminalLine("listening on vnet0, link-type EN10MB (Ethernet), snapshot length 262144 bytes", LineType.SYSTEM))
+                results.add(TerminalLine("19:42:01.120 IP 192.168.100.2.48102 > 8.8.8.8.53: 48210+ A? example.com. (29)", LineType.OUTPUT))
+                results.add(TerminalLine("19:42:01.134 IP 8.8.8.8.53 > 192.168.100.2.48102: 48210 1/0/0 A 93.184.216.34 (45)", LineType.OUTPUT))
+                results.add(TerminalLine("19:42:01.140 IP 192.168.100.2.51240 > 93.184.216.34.443: Flags [S], seq 128491024, win 64240", LineType.OUTPUT))
+                results.add(TerminalLine("19:42:01.155 IP 93.184.216.34.443 > 192.168.100.2.51240: Flags [S.], seq 48102834, ack 128491025", LineType.OUTPUT))
+                results.add(TerminalLine("4 packets captured, 4 packets received by filter, 0 packets dropped by kernel", LineType.SUCCESS))
+            }
+
+            // ARP
+            "arp" -> {
+                results.add(TerminalLine("Address                  HWtype  HWaddress           Flags Mask            Iface", LineType.SYSTEM))
+                results.add(TerminalLine("192.168.100.1            ether   52:54:00:12:34:56   C                     vnet0", LineType.OUTPUT))
+            }
+
+            // MSFCONSOLE
+            "msfconsole" -> {
+                results.add(TerminalLine("      .:okOOOkdc'           'cdkOOOko:.", LineType.ERROR))
+                results.add(TerminalLine("    .xOOOOOOOOOOOOc       cOOOOOOOOOOOOx.", LineType.ERROR))
+                results.add(TerminalLine("   :OOOOOOOOOOOOOOOk,   ,kOOOOOOOOOOOOOOO:", LineType.ERROR))
+                results.add(TerminalLine("  'OOOOOOOOOkkkkOOOOO: :OOOOOOOOOOOOOOOOOO'", LineType.ERROR))
+                results.add(TerminalLine("       =[ metasploit v6.3.35-dev-kali                   ]", LineType.SYSTEM))
+                results.add(TerminalLine("+ -- --=[ 2345 exploits - 1215 auxiliary - 412 post       ]", LineType.OUTPUT))
+                results.add(TerminalLine("+ -- --=[ 965 payloads  - 45 encoders   - 11 nops         ]", LineType.OUTPUT))
+                results.add(TerminalLine("Virtual Metasploit console initialized in RootBox container.", LineType.SUCCESS))
+                results.add(TerminalLine("msf6 >", LineType.SUCCESS))
+            }
+
+            // PYTHON3
+            "python", "python3" -> {
+                if (args.isEmpty()) {
+                    results.add(TerminalLine("Python 3.11.6 (main, Oct  8 2025, 05:06:43) [GCC 13.2.0] on linux", LineType.SYSTEM))
+                    results.add(TerminalLine("Type \"help\", \"copyright\", \"credits\" or \"license\" for more information.", LineType.OUTPUT))
+                    results.add(TerminalLine(">>> print('Hello from RootBox Kali environment!')", LineType.OUTPUT))
+                    results.add(TerminalLine("Hello from RootBox Kali environment!", LineType.SUCCESS))
+                } else if (args[0] == "-c") {
+                    val code = args.drop(1).joinToString(" ").trim('"', '\'')
+                    results.add(TerminalLine(">>> $code", LineType.OUTPUT))
+                    if (code.contains("2+2") || code.contains("2 + 2")) {
+                        results.add(TerminalLine("4", LineType.SUCCESS))
+                    } else {
+                        results.add(TerminalLine("Executed: $code", LineType.SUCCESS))
+                    }
+                } else {
+                    results.add(TerminalLine("Python 3.11: executed script ${args[0]}", LineType.SUCCESS))
+                }
+            }
+
+            // GIT
+            "git" -> {
+                if (args.isEmpty()) {
+                    results.add(TerminalLine("usage: git [--version] [--help] [-C <path>] [-c <name>=<value>] <command> [<args>]", LineType.OUTPUT))
+                } else if (args[0] == "clone") {
+                    val repo = args.getOrNull(1) ?: "https://github.com/rootbox/tools.git"
+                    val folderName = repo.substringAfterLast("/").removeSuffix(".git")
+                    results.add(TerminalLine("Cloning into '$folderName'...", LineType.OUTPUT))
+                    results.add(TerminalLine("remote: Enumerating objects: 42, done.", LineType.OUTPUT))
+                    results.add(TerminalLine("remote: Total 42 (delta 0), reused 0 (delta 0), pack-reused 42", LineType.OUTPUT))
+                    results.add(TerminalLine("Receiving objects: 100% (42/42), 24.18 KiB | 4.84 MiB/s, done.", LineType.SUCCESS))
+                    fs.createDirectory(resolveVirtualPath(folderName))
+                    fs.writeFile(resolveVirtualPath("$folderName/README.md"), "# $folderName\nCloned into RootBox virtual filesystem.")
+                } else {
+                    results.add(TerminalLine("git version 2.43.0", LineType.OUTPUT))
+                }
             }
 
             "id" -> {
                 if (isRoot) {
                     results.add(TerminalLine("uid=0(root) gid=0(root) groups=0(root),1004(input),1007(log),1015(sdcard_rw),3003(inet) context=u:r:su:s0", LineType.OUTPUT))
                 } else {
-                    results.add(TerminalLine("uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1015(sdcard_rw),3003(inet) context=u:r:shell:s0", LineType.OUTPUT))
+                    results.add(TerminalLine("uid=1000(kali) gid=1000(kali) groups=1000(kali),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),100(users)", LineType.OUTPUT))
                 }
             }
 
             "whoami" -> {
-                results.add(TerminalLine(if (isRoot) "root" else "shell", LineType.OUTPUT))
+                results.add(TerminalLine(if (isRoot) "root" else "kali", LineType.OUTPUT))
             }
 
             "uname" -> {
                 if (args.contains("-a")) {
-                    results.add(TerminalLine("Linux rootbox 6.1.0-rootbox-vAOSP #1 SMP PREEMPT RootBox Virtual Android aarch64", LineType.OUTPUT))
+                    results.add(TerminalLine("Linux kali 6.1.0-rootbox-vAOSP #1 SMP PREEMPT RootBox Virtual Android Kali GNU/Linux aarch64", LineType.OUTPUT))
                 } else {
                     results.add(TerminalLine("Linux", LineType.OUTPUT))
                 }
@@ -127,11 +451,11 @@ class VirtualTerminalEngine(
             "exit" -> {
                 if (isRoot) {
                     isRoot = false
-                    envVars["USER"] = "shell"
-                    envVars["UID"] = "2000"
-                    envVars["GID"] = "2000"
-                    envVars["HOME"] = "/data/local/tmp"
-                    results.add(TerminalLine("Dropped virtual root. Now in user shell (uid 2000).", LineType.WARNING))
+                    envVars["USER"] = "kali"
+                    envVars["UID"] = "1000"
+                    envVars["GID"] = "1000"
+                    envVars["HOME"] = "/home/kali"
+                    results.add(TerminalLine("Dropped virtual root. Now in user session (kali:1000).", LineType.WARNING))
                 } else {
                     results.add(TerminalLine("Terminal session active in RootBox container.", LineType.OUTPUT))
                 }
@@ -143,7 +467,7 @@ class VirtualTerminalEngine(
 
             "cd" -> {
                 val target = if (args.isEmpty() || args[0] == "~") {
-                    if (isRoot) "/root" else "/data/local/tmp"
+                    if (isRoot) "/root" else "/home/kali"
                 } else {
                     args[0]
                 }
@@ -297,21 +621,6 @@ class VirtualTerminalEngine(
                 }
             }
 
-            "export" -> {
-                if (args.isEmpty()) {
-                    envVars.forEach { (k, v) ->
-                        results.add(TerminalLine("declare -x $k=\"$v\"", LineType.OUTPUT))
-                    }
-                } else {
-                    for (arg in args) {
-                        val pair = arg.split("=", limit = 2)
-                        if (pair.size == 2) {
-                            envVars[pair[0]] = pair[1]
-                        }
-                    }
-                }
-            }
-
             "ps" -> {
                 results.add(TerminalLine("USER       PID   PPID  VSIZE  RSS   WCHAN            PC  NAME", LineType.SYSTEM))
                 results.add(TerminalLine("root         1      0  12416  4128  ep_poll    00000000 S init (vAOSP)", LineType.OUTPUT))
@@ -319,18 +628,18 @@ class VirtualTerminalEngine(
                 results.add(TerminalLine("root        10      1 145216 42100  poll       00000000 S zygote64", LineType.OUTPUT))
                 results.add(TerminalLine("system      12     10 412080 120400 ep_poll    00000000 S system_server", LineType.OUTPUT))
                 results.add(TerminalLine("root        18      1  18340  6240  ep_poll    00000000 S vnetd", LineType.OUTPUT))
-                results.add(TerminalLine("u0_a10     105     10 182300 48200  futex      00000000 S com.termux.virtual", LineType.OUTPUT))
-                results.add(TerminalLine(if (isRoot) "root       210      1  14200  5120  sys_pause  00000000 S sh (rootbox)" else "shell      210      1  14200  5120  sys_pause  00000000 S sh (rootbox)", LineType.OUTPUT))
+                results.add(TerminalLine("root       105      1  24150  8210  ep_poll    00000000 S nmap-service", LineType.OUTPUT))
+                results.add(TerminalLine(if (isRoot) "root       210      1  14200  5120  sys_pause  00000000 S bash (kali)" else "kali       210      1  14200  5120  sys_pause  00000000 S bash (kali)", LineType.OUTPUT))
             }
 
             "top" -> {
-                results.add(TerminalLine("Tasks: 7 total, 1 running, 6 sleeping, 0 stopped, 0 zombie", LineType.SYSTEM))
+                results.add(TerminalLine("Tasks: 8 total, 1 running, 7 sleeping, 0 stopped, 0 zombie", LineType.SYSTEM))
                 results.add(TerminalLine("%Cpu(s):  2.4 us,  1.1 sy,  0.0 ni, 96.2 id,  0.3 wa,  0.0 hi", LineType.SYSTEM))
                 results.add(TerminalLine("MiB Mem :   3072.0 total,   1420.5 free,   1184.2 used,    467.3 buff/cache", LineType.SYSTEM))
                 results.add(TerminalLine("PID  USER     PR  NI    VIRT    RES  S %CPU  %MEM     TIME+ COMMAND", LineType.SYSTEM))
                 results.add(TerminalLine(" 12  system   20   0  412.1M 120.4M  S  3.8   3.9   3:45.80 system_server", LineType.OUTPUT))
                 results.add(TerminalLine(" 10  root     20   0  145.2M  42.1M  S  1.4   1.4   1:20.15 zygote64", LineType.OUTPUT))
-                results.add(TerminalLine("105  u0_a10   20   0  182.3M  48.2M  S  0.8   1.6   0:42.10 com.termux.virtual", LineType.OUTPUT))
+                results.add(TerminalLine("105  root     20   0   24.1M   8.2M  S  0.8   0.3   0:12.40 nmap", LineType.OUTPUT))
                 results.add(TerminalLine("  1  root     20   0   12.4M   4.1M  S  0.2   0.1   0:14.22 init", LineType.OUTPUT))
             }
 
@@ -373,77 +682,39 @@ class VirtualTerminalEngine(
                 }
             }
 
-            "setprop" -> {
-                if (args.size < 2) {
-                    results.add(TerminalLine("Usage: setprop <key> <value>", LineType.WARNING))
-                } else {
-                    results.add(TerminalLine("Property [${args[0]}] set to [${args.drop(1).joinToString(" ")}]", LineType.SUCCESS))
-                }
-            }
-
             "pm" -> {
                 if (args.isEmpty()) {
                     results.add(TerminalLine("Package manager usage: pm [list packages|install <path>|uninstall <pkg>]", LineType.WARNING))
                 } else if (args[0] == "list" && args.getOrNull(1) == "packages") {
                     val apps = appDao?.getAllApps()?.firstOrNull() ?: emptyList()
-                    if (apps.isEmpty()) {
-                        results.add(TerminalLine("package:com.termux.virtual", LineType.OUTPUT))
-                        results.add(TerminalLine("package:stericson.busybox.virtual", LineType.OUTPUT))
-                        results.add(TerminalLine("package:com.speedsoftware.rootexplorer.virtual", LineType.OUTPUT))
-                    } else {
-                        apps.forEach {
-                            results.add(TerminalLine("package:${it.packageName}", LineType.OUTPUT))
-                        }
+                    apps.forEach {
+                        results.add(TerminalLine("package:${it.packageName}", LineType.OUTPUT))
                     }
                 } else if (args[0] == "install") {
-                    val apk = args.getOrNull(1)
-                    if (apk == null) {
-                        results.add(TerminalLine("Usage: pm install <path_to_apk>", LineType.ERROR))
-                    } else {
-                        results.add(TerminalLine("Success: Package $apk installed into /data/app", LineType.SUCCESS))
-                    }
+                    val apk = args.getOrNull(1) ?: "app.apk"
+                    results.add(TerminalLine("Success: Package $apk installed into /data/app", LineType.SUCCESS))
                 } else if (args[0] == "uninstall") {
                     val pkg = args.getOrNull(1)
-                    if (pkg == null) {
-                        results.add(TerminalLine("Usage: pm uninstall <package_name>", LineType.ERROR))
-                    } else {
+                    if (pkg != null) {
                         appDao?.deleteByPackageName(pkg)
                         results.add(TerminalLine("Success: Package $pkg uninstalled from virtual container", LineType.SUCCESS))
                     }
                 }
             }
 
-            "pkg" -> {
-                if (args.isEmpty() || args[0] == "list") {
-                    results.add(TerminalLine("RootBox Package Repository (Available Virtual Tools):", LineType.SYSTEM))
-                    results.add(TerminalLine("  busybox-pro        : Complete Unix toolset (1.36.1)", LineType.OUTPUT))
-                    results.add(TerminalLine("  termux-core        : Android terminal environment (v0.118)", LineType.OUTPUT))
-                    results.add(TerminalLine("  sqlite3-bin        : Standalone SQLite3 terminal CLI", LineType.OUTPUT))
-                    results.add(TerminalLine("  nano-editor        : Terminal text editor", LineType.OUTPUT))
-                    results.add(TerminalLine("  tcpdump-arm64      : Network packet capture utility", LineType.OUTPUT))
-                    results.add(TerminalLine("  micro-httpd        : Embedded HTTP microserver", LineType.OUTPUT))
-                } else if (args[0] == "install") {
-                    val tool = args.getOrNull(1) ?: "package"
-                    results.add(TerminalLine("Downloading $tool from RootBox Virtual Mirror...", LineType.OUTPUT))
-                    results.add(TerminalLine("Unpacking binary into /system/xbin/$tool", LineType.OUTPUT))
-                    results.add(TerminalLine("Setting permissions: 0755 root:root", LineType.OUTPUT))
-                    results.add(TerminalLine("Package $tool installed successfully.", LineType.SUCCESS))
-                }
-            }
-
             "dmesg" -> {
-                results.add(TerminalLine("[    0.000000] Booting RootBox Virtual Linux kernel 6.1.0-rootbox-vAOSP", LineType.SYSTEM))
+                results.add(TerminalLine("[    0.000000] Booting Linux kernel 6.1.0-rootbox-vAOSP-kali", LineType.SYSTEM))
                 results.add(TerminalLine("[    0.001420] Virtual CPU: 4 Cores allocated [ARM_v8.2_NEON]", LineType.OUTPUT))
                 results.add(TerminalLine("[    0.003512] Memory: 3145728K/3145728K available", LineType.OUTPUT))
                 results.add(TerminalLine("[    0.015240] RootBox vFS mounted on / [rw,noatime,relatime]", LineType.OUTPUT))
                 results.add(TerminalLine("[    0.021045] Virtual network interface vnet0 initialized (192.168.100.2)", LineType.SUCCESS))
                 results.add(TerminalLine("[    0.048910] Virtual root subsystem: UID 0 granted to rootbox", LineType.SUCCESS))
                 results.add(TerminalLine("[    0.061002] Security Isolation: Host physical kernel boundary enforced", LineType.WARNING))
-                results.add(TerminalLine("[    0.089100] init: Virtual AOSP stage 2 completed", LineType.OUTPUT))
+                results.add(TerminalLine("[    0.089100] Kali tool repository ready (/usr/bin, /usr/sbin)", LineType.OUTPUT))
             }
 
             "uptime" -> {
-                results.add(TerminalLine(" 16:20:10 up 3:15,  1 user,  load average: 0.12, 0.08, 0.05", LineType.OUTPUT))
+                results.add(TerminalLine(" 19:42:10 up 3:15,  1 user,  load average: 0.12, 0.08, 0.05", LineType.OUTPUT))
             }
 
             "date" -> {
@@ -452,11 +723,139 @@ class VirtualTerminalEngine(
             }
 
             else -> {
-                results.add(TerminalLine("$cmd: command not found. Type 'help' for available commands.", LineType.ERROR))
+                // If it's a known available tool not yet installed, suggest installing it
+                if (availableAptRepo.containsKey(cmd) && !installedTools.contains(cmd)) {
+                    results.add(TerminalLine("Command '$cmd' not found, but can be installed with:", LineType.ERROR))
+                    results.add(TerminalLine("  apt install $cmd", LineType.SYSTEM))
+                } else {
+                    results.add(TerminalLine("$cmd: command not found. Type 'help' or 'apt list' for available tools.", LineType.ERROR))
+                }
             }
         }
 
         return results
+    }
+
+    private fun handleAptCommand(args: List<String>, results: MutableList<TerminalLine>) {
+        if (args.isEmpty()) {
+            results.add(TerminalLine("apt 2.6.1 (arm64)", LineType.SYSTEM))
+            results.add(TerminalLine("Usage: apt [update | install <pkg> | remove <pkg> | list]", LineType.WARNING))
+            return
+        }
+
+        val subCmd = args[0]
+        when (subCmd) {
+            "update" -> {
+                results.add(TerminalLine("Get:1 http://http.kali.org/kali kali-rolling InRelease [41.5 kB]", LineType.OUTPUT))
+                results.add(TerminalLine("Get:2 http://http.kali.org/kali kali-rolling/main Sources [16.2 MB]", LineType.OUTPUT))
+                results.add(TerminalLine("Get:3 http://http.kali.org/kali kali-rolling/main arm64 Packages [19.8 MB]", LineType.OUTPUT))
+                results.add(TerminalLine("Fetched 36.0 MB in 1.4s (25.7 MB/s)", LineType.SUCCESS))
+                results.add(TerminalLine("Reading package lists... Done", LineType.OUTPUT))
+                results.add(TerminalLine("Building dependency tree... Done", LineType.OUTPUT))
+                results.add(TerminalLine("All 20 Kali virtual tools are up to date.", LineType.SUCCESS))
+            }
+
+            "install" -> {
+                val pkgs = args.drop(1)
+                if (pkgs.isEmpty()) {
+                    results.add(TerminalLine("apt install: missing package name(s).", LineType.ERROR))
+                    results.add(TerminalLine("Example: apt install nmap netcat curl", LineType.OUTPUT))
+                    return
+                }
+
+                results.add(TerminalLine("Reading package lists... Done", LineType.OUTPUT))
+                results.add(TerminalLine("Building dependency tree... Done", LineType.OUTPUT))
+
+                for (pkg in pkgs) {
+                    val cleanPkg = pkg.lowercase().trim()
+                    if (availableAptRepo.containsKey(cleanPkg)) {
+                        installedTools.add(cleanPkg)
+                        results.add(TerminalLine("The following NEW package will be installed: $cleanPkg", LineType.SYSTEM))
+                        results.add(TerminalLine("Get:1 http://http.kali.org/kali kali-rolling/main arm64 $cleanPkg (2.4.0) [2,481 kB]", LineType.OUTPUT))
+                        results.add(TerminalLine("Unpacking $cleanPkg into /usr/bin/$cleanPkg...", LineType.OUTPUT))
+                        results.add(TerminalLine("Setting up $cleanPkg (2.4.0-vaosp)...", LineType.OUTPUT))
+                        results.add(TerminalLine("✓ Package '$cleanPkg' installed successfully. Run '$cleanPkg' to use it.", LineType.SUCCESS))
+                        fs.writeFile(resolveVirtualPath("/system/xbin/$cleanPkg"), "#!/bin/sh\n# Kali $cleanPkg binary")
+                    } else {
+                        results.add(TerminalLine("E: Unable to locate package $pkg in Kali repositories.", LineType.ERROR))
+                    }
+                }
+            }
+
+            "remove", "purge" -> {
+                val pkg = args.getOrNull(1)?.lowercase()
+                if (pkg != null && installedTools.contains(pkg)) {
+                    installedTools.remove(pkg)
+                    results.add(TerminalLine("Removing $pkg (2.4.0-vaosp)...", LineType.OUTPUT))
+                    results.add(TerminalLine("✓ Package '$pkg' removed.", LineType.SUCCESS))
+                } else {
+                    results.add(TerminalLine("Package '${args.getOrNull(1)}' is not installed.", LineType.WARNING))
+                }
+            }
+
+            "list" -> {
+                val onlyInstalled = args.contains("--installed")
+                results.add(TerminalLine(if (onlyInstalled) "Installed Kali Packages:" else "Kali Rolling Package Repository:", LineType.SYSTEM))
+                availableAptRepo.forEach { (pkg, desc) ->
+                    val isInst = installedTools.contains(pkg)
+                    if (!onlyInstalled || isInst) {
+                        val status = if (isInst) "[installed]" else "[available]"
+                        val color = if (isInst) LineType.SUCCESS else LineType.OUTPUT
+                        results.add(TerminalLine("  $pkg - $desc $status", color))
+                    }
+                }
+            }
+
+            "search" -> {
+                val query = args.getOrNull(1)?.lowercase() ?: ""
+                results.add(TerminalLine("Searching Kali repository for '$query'...", LineType.SYSTEM))
+                val matches = availableAptRepo.filter { it.key.contains(query) || it.value.contains(query, ignoreCase = true) }
+                if (matches.isEmpty()) {
+                    results.add(TerminalLine("No matching packages found.", LineType.WARNING))
+                } else {
+                    matches.forEach { (pkg, desc) ->
+                        results.add(TerminalLine("$pkg/kali-rolling - $desc", LineType.OUTPUT))
+                    }
+                }
+            }
+
+            else -> {
+                results.add(TerminalLine("E: Invalid operation $subCmd. Use update, install, remove, or list.", LineType.ERROR))
+            }
+        }
+    }
+
+    private fun printKaliBanner(results: MutableList<TerminalLine>) {
+        results.add(TerminalLine("..............", LineType.SYSTEM))
+        results.add(TerminalLine("            ..,;:ccc,.", LineType.SYSTEM))
+        results.add(TerminalLine("          ......''';lxO.", LineType.SYSTEM))
+        results.add(TerminalLine(" .....''''..........,:ld;", LineType.SYSTEM))
+        results.add(TerminalLine("          .';;;:::;,,.x,", LineType.SYSTEM))
+        results.add(TerminalLine("     ..'''.            0Xxoc:,.  ...", LineType.SYSTEM))
+        results.add(TerminalLine(" ....                ,ONkc;,;cokOdc',.", LineType.SYSTEM))
+        results.add(TerminalLine(" .                   OMo           ':ddo.", LineType.SYSTEM))
+        results.add(TerminalLine("                    dMc               :OO;", LineType.SYSTEM))
+        results.add(TerminalLine("                    0M.                 :NO.", LineType.SYSTEM))
+        results.add(TerminalLine("                    Ol                   .Nx", LineType.SYSTEM))
+        results.add(TerminalLine("   KALI LINUX ROLLING CONTAINER", LineType.SUCCESS))
+        results.add(TerminalLine("   \"The Quieter You Become, The More You Are Able To Hear\"", LineType.OUTPUT))
+        results.add(TerminalLine("   RootBox Virtual Android • 64-bit ARM64", LineType.OUTPUT))
+    }
+
+    private fun printNeofetch(results: MutableList<TerminalLine>) {
+        results.add(TerminalLine("       _,met\$\$\$\$gg.          root@kali", LineType.SYSTEM))
+        results.add(TerminalLine("    ,g\$\$\$\$\$\$\$\$\$\$\$\$\$\$P.       ---------", LineType.SYSTEM))
+        results.add(TerminalLine("  ,g\$\$P\"\"       \"\"\"Y\$\$.     OS: Kali GNU/Linux Rolling arm64", LineType.OUTPUT))
+        results.add(TerminalLine(" ,\$\$P'              `\$\$\$.   Host: RootBox Virtual Android Container", LineType.OUTPUT))
+        results.add(TerminalLine("'\$\$P       ,ggs.     `\$\$b:  Kernel: 6.1.0-rootbox-vAOSP-kali", LineType.OUTPUT))
+        results.add(TerminalLine("d\$\$'     ,\$P\"'   .    \$\$\$   Uptime: 3 hours, 15 mins", LineType.OUTPUT))
+        results.add(TerminalLine("\$\$P      d\$\$'     ,   \$\$\$P  Packages: ${installedTools.size} (apt), 5 (pm)", LineType.OUTPUT))
+        results.add(TerminalLine("\$\$:      \$\$.   -    ,d\$\$'   Shell: bash 5.2.15", LineType.OUTPUT))
+        results.add(TerminalLine("\$\$;      Y\$b._   _,d\$P'     Terminal: rootbox-term (xterm-256color)", LineType.OUTPUT))
+        results.add(TerminalLine("Y\$\$.     `.`\"Y\$\$\$P\"'        CPU: Virtual ARM64 4-Core @ 2.40GHz", LineType.OUTPUT))
+        results.add(TerminalLine(" `\$\$b      \"-.__            Memory: 1184MiB / 3072MiB", LineType.OUTPUT))
+        results.add(TerminalLine("  `Y\$\$.                     Root Context: UID 0 (root)", LineType.SUCCESS))
+        results.add(TerminalLine("    `\$\$b.                   Network: vnet0 (192.168.100.2)", LineType.SUCCESS))
     }
 
     private fun handleRedirection(command: String, results: MutableList<TerminalLine>): List<TerminalLine> {
@@ -488,7 +887,7 @@ class VirtualTerminalEngine(
     private fun resolveVirtualDir(path: String): String {
         return when {
             path == "/" -> "/"
-            path == "~" -> if (isRoot) "/root" else "/data/local/tmp"
+            path == "~" -> if (isRoot) "/root" else "/home/kali"
             path.startsWith("/") -> normalizePath(path)
             path == ".." -> {
                 val parent = File(cwd).parent ?: "/"

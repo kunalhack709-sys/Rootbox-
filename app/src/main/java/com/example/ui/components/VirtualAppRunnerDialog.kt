@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.entities.VirtualAppEntity
+import com.example.ui.theme.CyberAmber
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberEmerald
 import com.example.ui.theme.CyberRed
@@ -65,14 +66,25 @@ fun VirtualAppRunnerDialog(
         kotlin.math.abs(app.packageName.hashCode() % 800) + 120
     }
 
-    val simulatedLogs = remember(app.packageName) {
+    val simulatedLogs = remember(app.packageName, app.rootAccessGranted) {
+        val rootStatus = if (app.rootAccessGranted) {
+            "[RootBox::Sandbox] Assigned virtual UID 0 (root) (Elevated Virtual Root context: GRANTED)"
+        } else {
+            "[RootBox::Sandbox] Assigned virtual UID u0_a${pid % 100} (Standard Sandbox context: ISOLATED)"
+        }
+        val suCheck = if (app.rootAccessGranted) {
+            "[vAOSP::su] App executed /system/xbin/su -> Superuser session established in RootBox sandbox"
+        } else {
+            "[vAOSP::su] App requested su access -> Virtual su policy: STANDARD SANDBOX"
+        }
+
         listOf(
-            "[RootBox::Runtime] Spawning zygote fork for ${app.packageName}...",
-            "[RootBox::Sandbox] Assigned virtual UID u0_a${pid % 100} (Elevated Virtual Root context: ALLOWED)",
+            "[RootBox::Runtime] Spawning zygote fork for ${app.packageName} (Arch: ${app.architecture})...",
+            rootStatus,
             "[am] Starting: Intent { act=android.intent.action.MAIN cmp=${app.packageName}/.MainActivity }",
             "[SystemServer] WindowManager: Created surface layer 1080x2400 (DPI 420)",
             "[ActivityThread] Loaded package: ${app.packageName} (version ${app.versionName})",
-            "[vAOSP::su] App requested superuser binary check -> /system/xbin/su (OK: GRANTED)",
+            suCheck,
             "[OpenGLRenderer] Initializing Virtual GLES 3.2 Context via Vulkan host bridge",
             "[RootBox::vnet0] Virtual socket bound: 192.168.100.2:${40000 + pid}",
             "[ProcessMonitor] PID $pid state: TOP_ACTIVITY (Active in virtual display)"
@@ -152,9 +164,19 @@ fun VirtualAppRunnerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CyberEmerald, modifier = Modifier.size(14.dp))
+                        Icon(
+                            if (app.rootAccessGranted) Icons.Default.Shield else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = if (app.rootAccessGranted) CyberAmber else CyberEmerald,
+                            modifier = Modifier.size(14.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Virtual Root Context: Active", color = CyberEmerald, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (app.rootAccessGranted) "Virtual Root: Active (UID 0)" else "Virtual Sandbox: Standard",
+                            color = if (app.rootAccessGranted) CyberAmber else CyberEmerald,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Memory, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(14.dp))
@@ -184,7 +206,7 @@ fun VirtualAppRunnerDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Target: ${app.packageName} (isolated environment)",
+                                text = "Package: ${app.packageName} • Version: ${app.versionName}",
                                 color = TextMuted,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
@@ -197,6 +219,7 @@ fun VirtualAppRunnerDialog(
                                 text = log,
                                 color = when {
                                     log.contains("GRANTED") || log.contains("ALLOWED") -> CyberEmerald
+                                    log.contains("STANDARD") -> CyberCyan
                                     log.contains("Starting") || log.contains("Loaded") -> TextPrimary
                                     else -> TextSecondary
                                 },

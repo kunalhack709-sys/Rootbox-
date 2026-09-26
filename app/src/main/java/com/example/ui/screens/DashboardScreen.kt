@@ -15,9 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Folder
@@ -51,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.virtualization.InstanceStatus
+import com.example.data.local.entities.VirtualAppEntity
 import com.example.ui.components.HardwareMetricCard
 import com.example.ui.components.SecurityNoticeBanner
 import com.example.ui.components.StatusBadge
@@ -175,6 +179,28 @@ fun DashboardScreen(
             }
         }
 
+        // Prominent [ + Add App ] Action Button
+        item {
+            Button(
+                onClick = { viewModel.openAddAppSheet() },
+                colors = ButtonDefaults.buttonColors(containerColor = CyberEmerald),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("dashboard_add_app_button"),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "+ Add App",
+                    color = Color.Black,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
         // Security Notice Banner
         item {
             SecurityNoticeBanner()
@@ -240,6 +266,45 @@ fun DashboardScreen(
                     accentColor = if (networkStats.isConnected) CyberCyan else CyberAmber,
                     modifier = Modifier.weight(1f)
                 )
+            }
+        }
+
+        // Quick Launch Installed Apps Row
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "INSTALLED APPLICATIONS (${apps.size})",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Text(
+                    text = "View All",
+                    color = CyberCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { viewModel.setTab(NavigationTab.APPS) }
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(apps) { app ->
+                    DashboardAppChip(
+                        app = app,
+                        onLaunch = { viewModel.launchVirtualApp(app) },
+                        onDetails = { viewModel.selectAppDetail(app) }
+                    )
+                }
             }
         }
 
@@ -315,7 +380,7 @@ fun DashboardScreen(
             }
         }
 
-        // Quick Navigation Grid
+        // Quick Subsystems Grid
         item {
             Text(
                 text = "VIRTUAL SUBSYSTEMS",
@@ -446,6 +511,67 @@ fun DashboardScreen(
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun DashboardAppChip(
+    app: VirtualAppEntity,
+    onLaunch: () -> Unit,
+    onDetails: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                1.dp,
+                if (app.isRunning) CyberEmerald.copy(alpha = 0.6f) else DarkBorder,
+                RoundedCornerShape(14.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(if (app.isSystemApp) CyberCyan.copy(alpha = 0.15f) else CyberPurple.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Android, contentDescription = null, tint = if (app.isSystemApp) CyberCyan else CyberPurple, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = app.appName,
+                color = TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Text(
+                text = if (app.isRunning) "Running" else "Stopped",
+                color = if (app.isRunning) CyberEmerald else TextMuted,
+                fontSize = 10.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onLaunch,
+                colors = ButtonDefaults.buttonColors(containerColor = if (app.isRunning) CyberAmber else CyberEmerald),
+                modifier = Modifier.fillMaxWidth().height(28.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = if (app.isRunning) "Switch" else "Launch",
+                    color = Color.Black,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

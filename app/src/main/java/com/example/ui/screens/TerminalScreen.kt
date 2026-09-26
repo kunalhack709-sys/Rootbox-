@@ -25,7 +25,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -54,8 +57,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.terminal.LineType
+import com.example.ui.theme.CyberAmber
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberEmerald
+import com.example.ui.theme.CyberPurple
 import com.example.ui.theme.CyberRed
 import com.example.ui.theme.DarkBackground
 import com.example.ui.theme.DarkBorder
@@ -87,7 +92,27 @@ fun TerminalScreen(
         }
     }
 
-    val quickCommands = listOf("id", "uname -a", "ls /", "df -h", "top", "ps", "su", "help", "clear")
+    val quickCommands = listOf(
+        "apt update",
+        "apt install nmap",
+        "nmap 192.168.100.1",
+        "ifconfig",
+        "neofetch",
+        "kali-banner",
+        "curl -I https://google.com",
+        "whois google.com",
+        "dig example.com",
+        "traceroute 1.1.1.1",
+        "netstat -tuln",
+        "python3 -c \"print('RootBox')\"",
+        "msfconsole",
+        "apt list --installed",
+        "id",
+        "uname -a",
+        "ls /",
+        "df -h",
+        "clear"
+    )
 
     Column(
         modifier = modifier
@@ -96,7 +121,7 @@ fun TerminalScreen(
             .background(DarkBackground)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        // Terminal Window Header
+        // Terminal Window Header with Kali branding
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -108,7 +133,7 @@ fun TerminalScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Cyber Dots
+                // Cyber Window Controls
                 Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(CyberRed))
                 Spacer(modifier = Modifier.width(6.dp))
                 Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(TerminalYellow))
@@ -120,35 +145,49 @@ fun TerminalScreen(
                 Icon(
                     imageVector = Icons.Default.Terminal,
                     contentDescription = null,
-                    tint = CyberEmerald,
+                    tint = CyberCyan,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "RootBox Terminal",
+                    text = "Kali Terminal",
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "[root@rootbox (vAOSP)]",
+                    text = "[root@kali]",
                     color = CyberEmerald,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            IconButton(
-                onClick = { viewModel.clearTerminal() },
-                modifier = Modifier.size(28.dp).testTag("clear_terminal_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.DeleteSweep,
-                    contentDescription = "Clear Terminal",
-                    tint = TextMuted,
-                    modifier = Modifier.size(18.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = { viewModel.sendTerminalCommand("kali-mode") },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberCyan.copy(alpha = 0.2f)),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(26.dp)
+                ) {
+                    Text("Kali Mode", color = CyberCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                IconButton(
+                    onClick = { viewModel.clearTerminal() },
+                    modifier = Modifier.size(28.dp).testTag("clear_terminal_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = "Clear Terminal",
+                        tint = TextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
@@ -167,7 +206,7 @@ fun TerminalScreen(
             ) {
                 items(lines) { line ->
                     val color = when (line.type) {
-                        LineType.COMMAND -> TerminalPrompt
+                        LineType.COMMAND -> TerminalCyan
                         LineType.OUTPUT -> TerminalText
                         LineType.ERROR -> TerminalRed
                         LineType.SUCCESS -> CyberEmerald
@@ -205,7 +244,11 @@ fun TerminalScreen(
                     label = {
                         Text(
                             text = cmd,
-                            color = CyberCyan,
+                            color = when {
+                                cmd.startsWith("apt") -> CyberEmerald
+                                cmd.startsWith("nmap") || cmd.startsWith("msf") -> CyberAmber
+                                else -> CyberCyan
+                            },
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -219,7 +262,7 @@ fun TerminalScreen(
                         enabled = true,
                         selected = false
                     ),
-                    modifier = Modifier.testTag("quick_cmd_$cmd")
+                    modifier = Modifier.testTag("quick_cmd_${cmd.replace(" ", "_")}")
                 )
             }
         }
@@ -232,74 +275,88 @@ fun TerminalScreen(
                 .border(1.dp, DarkBorder, RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)),
             colors = CardDefaults.cardColors(containerColor = DarkSurface)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = prompt,
-                    color = CyberEmerald,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp, end = 4.dp)
-                )
-
-                OutlinedTextField(
-                    value = inputCommand,
-                    onValueChange = { inputCommand = it },
-                    placeholder = {
-                        Text("Type command...", color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("terminal_input_field"),
-                    textStyle = TextStyle(
+            Column(modifier = Modifier.padding(8.dp)) {
+                if (prompt.contains("\n")) {
+                    // Multi-line Kali prompt: ┌──(root㉿kali)-[/]
+                    val parts = prompt.split("\n")
+                    Text(
+                        text = parts[0],
+                        color = CyberCyan,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val activeSymbol = if (prompt.contains("\n")) prompt.substringAfterLast("\n") else prompt
+                    Text(
+                        text = activeSymbol,
+                        color = CyberEmerald,
                         fontSize = 12.sp,
-                        color = TextPrimary
-                    ),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(
-                        onSend = {
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 4.dp, end = 4.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = inputCommand,
+                        onValueChange = { inputCommand = it },
+                        placeholder = {
+                            Text("e.g. apt install nmap, ifconfig...", color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("terminal_input_field"),
+                        textStyle = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = TextPrimary
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (inputCommand.isNotBlank()) {
+                                    viewModel.sendTerminalCommand(inputCommand)
+                                    inputCommand = ""
+                                }
+                            }
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = DarkBackground,
+                            unfocusedContainerColor = DarkBackground,
+                            focusedBorderColor = CyberCyan,
+                            unfocusedBorderColor = DarkBorder
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = {
                             if (inputCommand.isNotBlank()) {
                                 viewModel.sendTerminalCommand(inputCommand)
                                 inputCommand = ""
                             }
-                        }
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = DarkBackground,
-                        unfocusedContainerColor = DarkBackground,
-                        focusedBorderColor = CyberEmerald,
-                        unfocusedBorderColor = DarkBorder
-                    )
-                )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                IconButton(
-                    onClick = {
-                        if (inputCommand.isNotBlank()) {
-                            viewModel.sendTerminalCommand(inputCommand)
-                            inputCommand = ""
-                        }
-                    },
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(CyberEmerald)
-                        .testTag("send_command_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
-                    )
+                        },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(CyberEmerald)
+                            .testTag("send_command_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

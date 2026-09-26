@@ -39,9 +39,6 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +56,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.AddAppModal
+import com.example.ui.components.ApkInstallProgressDialog
+import com.example.ui.components.ApkValidationFailureDialog
+import com.example.ui.components.RootManagerDialog
 import com.example.ui.components.StatusBadge
 import com.example.ui.screens.AppsScreen
 import com.example.ui.screens.DashboardScreen
@@ -101,6 +102,10 @@ fun RootBoxApp(viewModel: RootBoxViewModel) {
     val status by viewModel.instanceStatus.collectAsState()
     val showWizard by viewModel.showSetupWizard.collectAsState()
     val snackbarMsg by viewModel.snackbarMessage.collectAsState()
+    val showAddAppSheet by viewModel.showAddAppSheet.collectAsState()
+    val installProgress by viewModel.installProgressState.collectAsState()
+    val validationFailure by viewModel.validationFailure.collectAsState()
+    val rootRequest by viewModel.rootRequestPrompt.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -157,6 +162,44 @@ fun RootBoxApp(viewModel: RootBoxViewModel) {
         }
     }
 
+    // Add App Bottom Sheet / Modal
+    if (showAddAppSheet) {
+        AddAppModal(
+            onDismiss = { viewModel.closeAddAppSheet() },
+            onInstallApk = { uri -> viewModel.installApkWithValidation(uri) },
+            onInstallMultipleApks = { uris -> viewModel.installMultipleApks(uris) },
+            onInstallSampleApp = { key -> viewModel.installSampleApp(key) }
+        )
+    }
+
+    // Live Step-by-Step Installation Progress Dialog
+    installProgress?.let { state ->
+        ApkInstallProgressDialog(
+            state = state,
+            onLaunch = { app -> viewModel.launchVirtualApp(app) },
+            onAppInfo = { app -> viewModel.selectAppDetail(app) },
+            onDismiss = { viewModel.dismissInstallProgress() }
+        )
+    }
+
+    // Incompatible APK Validation Failure Dialog
+    validationFailure?.let { failure ->
+        ApkValidationFailureDialog(
+            validationResult = failure,
+            onDismiss = { viewModel.dismissValidationFailure() }
+        )
+    }
+
+    // Root Request Dialog (Virtual Root Sandbox Access)
+    rootRequest?.let { app ->
+        RootManagerDialog(
+            app = app,
+            onAllow = { viewModel.allowRootAccess(app.packageName) },
+            onDeny = { viewModel.denyRootAccess(app.packageName) }
+        )
+    }
+
+    // Setup Wizard Dialog
     if (showWizard) {
         SetupWizardDialog(
             viewModel = viewModel,
